@@ -23,7 +23,7 @@ fn normalize(file_name: &str) -> Result<impl Iterator<Item = String>, &'static s
 
   for l in reader.lines() {
     let l = l.map_err(|_err| "Failed to read line")?;
-    if !l.trim_start().starts_with("v ") {
+    if Some("v") != l.trim_start().split_whitespace().next() {
       read_lines.push(Some(l));
       continue;
     }
