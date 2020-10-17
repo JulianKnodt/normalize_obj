@@ -4,7 +4,10 @@ use std::{
 };
 
 fn main() {
-  let iter = std::env::args().skip(1).filter(|it| it.ends_with(".obj"));
+  let iter = std::env::args()
+    .skip(1)
+    .filter(|it| it.ends_with(".obj"))
+    .filter(|it| !it.starts_with("normed_"));
   for obj_file in iter {
     let out = normalize(&obj_file).expect("Failed to normalize OBJ file");
     let out_file = File::create("normed_".to_owned() + &obj_file).expect("Failed to create file");
