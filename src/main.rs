@@ -10,7 +10,7 @@ fn main() {
     .filter(|it| !it.starts_with("normed_"));
   for obj_file in iter {
     let out = normalize(&obj_file).expect("Failed to normalize OBJ file");
-    let out_file = File::create("normed_".to_owned() + &obj_file).expect("Failed to create file");
+    let out_file = File::create(&obj_file).expect("Failed to create file");
     let mut dst = BufWriter::new(out_file);
     for l in out {
       write!(dst, "{}\n", l).expect("Write failed");
