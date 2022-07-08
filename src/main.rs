@@ -6,6 +6,8 @@ use std::{
     io::{BufRead, BufReader, BufWriter, Write},
 };
 
+mod off;
+
 type Vec3 = [f64; 3];
 
 /// Utility to normalize an OBJ mesh to the center, and fit it within to the unit box, or within
@@ -36,7 +38,6 @@ struct Args {
 fn main() {
     let args = Args::parse();
 
-    let out = normalize(&args.src, args.target.as_ref(), args.method);
     let mut out_files = vec![];
     if args.in_place {
         let out_file = File::create(&args.src).expect("Failed to replace original file");
@@ -46,11 +47,23 @@ fn main() {
         let out_file = File::create(&output).expect("Failed to create output file");
         out_files.push(BufWriter::new(out_file));
     }
-    for l in out {
-        for f in out_files.iter_mut() {
-            write!(f, "{}\n", l).expect("Write failed");
+    if args.src.ends_with(".off") {
+        println!("Converting .off file to obj without normalizing...");
+        let (v, f) = off::parse(&args.src);
+        let out = off::to_obj(v, f);
+        for l in out {
+            for f in out_files.iter_mut() {
+                write!(f, "{}\n", l).expect("Write failed");
+            }
         }
-    }
+    } else {
+        let out = normalize(&args.src, args.target.as_ref(), args.method);
+        for l in out {
+            for f in out_files.iter_mut() {
+                write!(f, "{}\n", l).expect("Write failed");
+            }
+        }
+    };
 }
 
 fn read_vertices(file_name: &String) -> Vec<Vec3> {
