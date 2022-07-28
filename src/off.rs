@@ -25,7 +25,7 @@ pub fn parse(f: &str) -> (Vec<Vec3>, Vec<Vec<usize>>) {
     for l in buf_reader.lines() {
         let l = l.expect("Failed to read line");
         match &l.split_whitespace().collect::<Vec<_>>().as_slice() {
-            [v, ..] if v.starts_with("#") => continue,
+            [v, ..] if v.starts_with('#') => continue,
             [..] if curr == State::Done => {
                 panic!("Unexpected line after reading all items {:?}", l);
             }
@@ -75,7 +75,7 @@ pub fn to_obj(verts: Vec<Vec3>, faces: Vec<Vec<usize>>) -> impl Iterator<Item = 
             let trailing = face
                 .iter()
                 .map(|vi| vi + 1) // 0 to 1 indexed
-                .map(|vi| format!("{vi}// "))
+                .map(|vi| format!("{vi} "))
                 .collect::<String>();
             format!("f {}", trailing)
         }))

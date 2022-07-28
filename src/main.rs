@@ -1,4 +1,5 @@
-use clap::Parser;
+#![feature(let_chains)]
+use clap::{ArgEnum, Parser};
 
 use std::{
     fmt,
@@ -20,7 +21,7 @@ struct Args {
     src: String,
     /// How should the mesh be normalized? Either fixing the AABB, or the average of all the
     /// vertices.
-    #[clap(short, long, value_parser, default_value_t = NormalizeKind::AABB)]
+    #[clap(short, long, value_parser, arg_enum, default_value_t = NormalizeKind::AABB)]
     method: NormalizeKind,
     /// Which mesh to normalize to, if any.
     #[clap(short, long, value_parser)]
@@ -33,6 +34,11 @@ struct Args {
     /// Perform operation in place (can be specified in addition to outputting a file).
     #[clap(long)]
     in_place: bool,
+
+    /// If target and src have same number of vertices, directly replace src's vertex position
+    /// with target's.
+    #[clap(long)]
+    replace_positions: bool,
 }
 
 fn main() {
@@ -53,14 +59,19 @@ fn main() {
         let out = off::to_obj(v, f);
         for l in out {
             for f in out_files.iter_mut() {
-                write!(f, "{}\n", l).expect("Write failed");
+                writeln!(f, "{}", l).expect("Write failed");
             }
         }
     } else {
-        let out = normalize(&args.src, args.target.as_ref(), args.method);
+        let out = normalize(
+            &args.src,
+            args.target.as_ref(),
+            args.method,
+            args.replace_positions,
+        );
         for l in out {
             for f in out_files.iter_mut() {
-                write!(f, "{}\n", l).expect("Write failed");
+                writeln!(f, "{}", l).expect("Write failed");
             }
         }
     };
@@ -72,7 +83,7 @@ fn read_vertices(file_name: &String) -> Vec<Vec3> {
     let mut points: Vec<Vec3> = vec![];
     for l in reader.lines() {
         let l = l.expect("Failed to read line");
-        match l.trim().split_whitespace().collect::<Vec<_>>().as_slice() {
+        match l.split_whitespace().collect::<Vec<_>>().as_slice() {
             ["v", x, y, z] => {
                 points.push([x.parse().unwrap(), y.parse().unwrap(), z.parse().unwrap()]);
             }
@@ -87,9 +98,10 @@ fn normalize(
     file_name: &str,
     to_match: Option<&String>,
     kind: NormalizeKind,
+    replace_positions: bool,
 ) -> impl Iterator<Item = String> {
     let file = File::open(file_name).expect("Failed to open file");
-    let to_match = to_match.map(|tm| read_vertices(tm));
+    let to_match = to_match.map(read_vertices);
     let reader = BufReader::new(file);
     // keep track all lines read, so that can write out the file later
     let mut read_lines: Vec<Option<String>> = vec![];
@@ -97,7 +109,7 @@ fn normalize(
 
     for l in reader.lines() {
         let l = l.expect("Failed to read line");
-        match l.trim().split_whitespace().collect::<Vec<_>>().as_slice() {
+        match l.split_whitespace().collect::<Vec<_>>().as_slice() {
             ["v", x, y, z] => {
                 points.push([x.parse().unwrap(), y.parse().unwrap(), z.parse().unwrap()]);
                 read_lines.push(None);
@@ -107,7 +119,7 @@ fn normalize(
         }
     }
     let (center, scale) = kind.center_scale(&points);
-    let map_to = to_match.map(|tm| kind.center_scale(&tm));
+    let map_to = to_match.as_ref().map(|tm| kind.center_scale(tm));
     for p in points.iter_mut() {
         *p = sub(*p, center);
         *p = div(*p, scale);
@@ -116,12 +128,15 @@ fn normalize(
             *p = add(*p, new_center);
         }
     }
+    if let Some(tm) = to_match && replace_positions {
+        points.clone_from_slice(&tm);
+    }
     let iter = read_lines
         .iter_mut()
         .filter(|l| l.is_none())
         .zip(points.into_iter());
     for (l, [x, y, z]) in iter {
-        *l = Some(String::from(format!("v {:?} {:?} {:?}", x, y, z)));
+        *l = Some(format!("v {:?} {:?} {:?}", x, y, z));
     }
     read_lines.into_iter().map(Option::unwrap)
 }
@@ -177,14 +192,14 @@ fn norm([a, b, c]: &Vec3) -> f64 {
     (a * a + b * b + c * c).sqrt()
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, ArgEnum)]
 enum NormalizeKind {
     AABB,
     Centroid,
 }
 
 impl NormalizeKind {
-    fn center_scale<'a>(self, vs: &[Vec3]) -> (Vec3, Vec3) {
+    fn center_scale(self, vs: &[Vec3]) -> (Vec3, Vec3) {
         match self {
             NormalizeKind::AABB => {
                 let (ll, ur) = bounding_box(vs);
@@ -211,17 +226,6 @@ impl fmt::Display for NormalizeKind {
         match self {
             NormalizeKind::AABB => write!(f, "AABB"),
             NormalizeKind::Centroid => write!(f, "Centroid"),
-        }
-    }
-}
-
-impl std::str::FromStr for NormalizeKind {
-    type Err = String;
-    fn from_str(s: &str) -> Result<Self, String> {
-        match s.to_lowercase().as_str() {
-            "aabb" => Ok(NormalizeKind::AABB),
-            "centroid" => Ok(NormalizeKind::Centroid),
-            x => Err(format!("Unknown normalization: {:?}", x)),
         }
     }
 }
